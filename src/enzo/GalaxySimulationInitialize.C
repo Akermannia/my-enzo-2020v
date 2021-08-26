@@ -60,7 +60,19 @@ int GalaxySimulationInitialize(FILE *fptr, FILE *Outfptr,
   char *CRName      = "CREnergyDensity";
   char *MetalName   = "Metal_Density";
   char *MetalIaName = "MetalSNIa_Density";
-
+  char *ElectronName = "Electron_Density";
+  char *HIName      = "HI_Density";
+  char *HIIName     = "HII_Density";
+  char *HeIName     = "HeI_Density";
+  char *HeIIName    = "HeII_Density";
+  char *HeIIIName   = "HeIII_Density";
+  char *HMName      = "HM_Density";
+  char *H2IName     = "H2I_Density";
+  char *H2IIName    = "H2II_Density";
+  char *DIName      = "DI_Density";
+  char *DIIName     = "DII_Density";
+  char *HDIName     = "HDI_Density";
+  
   /* declarations */
 
   char  line[MAX_LINE_LENGTH];
@@ -356,6 +368,7 @@ int GalaxySimulationInitialize(FILE *fptr, FILE *Outfptr,
     if (MetaData.TopGridRank > 2)
       Exterior.InitializeExternalBoundaryFace(2, inflow, outflow,
 					      InflowValue, Dummy);
+    Exterior.InitializeExternalBoundaryParticles(MetaData.ParticleBoundaryType);
 	
     /* Set Global Variables for RPS Wind (see ExternalBoundary_SetGalaxySimulationBoundary.C)*/
 
@@ -382,6 +395,25 @@ int GalaxySimulationInitialize(FILE *fptr, FILE *Outfptr,
    DataLabel[count++] = Vel3Name;
  if(CRModel)
    DataLabel[count++] = CRName;
+ 
+ if (MultiSpecies) {
+   DataLabel[count++] = (char*) ElectronName;
+   DataLabel[count++] = (char*) HIName;
+   DataLabel[count++] = (char*) HIIName;
+   DataLabel[count++] = (char*) HeIName;
+   DataLabel[count++] = (char*) HeIIName;
+   DataLabel[count++] = (char*) HeIIIName;
+   if (MultiSpecies > 1) {
+     DataLabel[count++] = (char*) HMName;
+     DataLabel[count++] = (char*) H2IName;
+     DataLabel[count++] = (char*) H2IIName;
+   }
+   if (MultiSpecies > 2) {
+     DataLabel[count++] = (char*) DIName;
+     DataLabel[count++] = (char*) DIIName;
+     DataLabel[count++] = (char*) HDIName;
+   }
+ }
  if (GalaxySimulationUseMetallicityField)
    DataLabel[count++] = MetalName;
  if (StarMakerTypeIaSNe)
