@@ -49,7 +49,7 @@ Star::Star(void)
 {
   int dim;
   for (dim = 0; dim < MAX_DIMENSION; dim++)
-    pos[dim] = vel[dim] = delta_vel[dim] = accreted_angmom[dim] = 0.0;
+    pos[dim] = vel[dim] = last_vel[dim] = delta_vel[dim] = accreted_angmom[dim] = 0.0;
   accretion_rate = NULL;
   accretion_time = NULL;
   NextStar = NULL;
@@ -70,6 +70,7 @@ Star::Star(grid *_grid, int _id, int _level)
   for (dim = 0; dim < MAX_DIMENSION; dim++) {
     pos[dim] = _grid->ParticlePosition[dim][_id];
     vel[dim] = _grid->ParticleVelocity[dim][_id];
+    last_vel[dim] = vel[dim];
     delta_vel[dim] = 0.0;
     accreted_angmom[dim] = 0.0;
   }
@@ -107,6 +108,7 @@ Star::Star(StarBuffer *buffer, int n)
   for (i = 0; i < MAX_DIMENSION; i++) {
     pos[i] = buffer[n].pos[i];
     vel[i] = buffer[n].vel[i];
+    last_vel[i] = buffer[n].last_vel[i];
     delta_vel[i] = buffer[n].delta_vel[i];
     accreted_angmom[i] = buffer[n].accreted_angmom[i];
   }
@@ -148,6 +150,7 @@ Star::Star(StarBuffer buffer)
   for (i = 0; i < MAX_DIMENSION; i++) {
     pos[i] = buffer.pos[i];
     vel[i] = buffer.vel[i];
+    last_vel[i] = buffer.last_vel[i];
     delta_vel[i] = buffer.delta_vel[i];
     accreted_angmom[i] = buffer.accreted_angmom[i];
   }
@@ -209,6 +212,7 @@ void Star::operator=(Star a)
   for (dim = 0; dim < MAX_DIMENSION; dim++) {
     pos[dim] = a.pos[dim];
     vel[dim] = a.vel[dim];
+    last_vel[dim] = a.last_vel[dim];
     delta_vel[dim] = a.delta_vel[dim];
     accreted_angmom[dim] = a.accreted_angmom[dim];
   }
@@ -275,6 +279,7 @@ Star *Star::copy(void)
   for (dim = 0; dim < MAX_DIMENSION; dim++) {
     a->pos[dim] = pos[dim];
     a->vel[dim] = vel[dim];
+    a->last_vel[dim] = last_vel[dim];
     a->delta_vel[dim] = delta_vel[dim];
     a->accreted_angmom[dim] = accreted_angmom[dim];
   }
@@ -345,6 +350,7 @@ void Star::Merge(Star a)
   for (dim = 0; dim < MAX_DIMENSION; dim++) {
     pos[dim] = ratio1 * pos[dim] + ratio2 * a.pos[dim];
     vel[dim] = ratio1 * vel[dim] + ratio2 * a.vel[dim];
+    last_vel[dim] = ratio1 * last_vel[dim] + ratio2 * a.last_vel[dim];
     accreted_angmom[dim] = ratio1 * accreted_angmom[dim] + ratio2 * a.accreted_angmom[dim];
   }
   Mass += a.Mass;
@@ -536,6 +542,7 @@ void Star::StarListToBuffer(StarBuffer *&result, int n)
     for (i = 0; i < MAX_DIMENSION; i++) {
       result[count].pos[i] = tmp->pos[i];
       result[count].vel[i] = tmp->vel[i];
+      result[count].last_vel[i] = tmp->last_vel[i];
       result[count].delta_vel[i] = tmp->delta_vel[i];
       result[count].accreted_angmom[i] = tmp->accreted_angmom[i];
     }
@@ -605,4 +612,5 @@ void Star::StarToBuffer(StarBuffer *result)
   result->AddedEmissivity = tmp->AddedEmissivity;
   return;
 }
+
 

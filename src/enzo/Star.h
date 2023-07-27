@@ -27,6 +27,7 @@ class Star
   grid		*CurrentGrid;
   FLOAT	 pos[MAX_DIMENSION];
   float		 vel[MAX_DIMENSION];
+  float		 last_vel[MAX_DIMENSION];
   float		 delta_vel[MAX_DIMENSION];
   int		 naccretions;
   float		*accretion_rate;	// prescribed Mdot(t) [Msun / s]
@@ -67,6 +68,8 @@ public:
   Star operator+(Star a);
   Star operator+=(Star a);
   Star* copy(void);
+ 
+  FLOAT Time;
 
   // Routines
   star_type ReturnType(void) { return type; };
@@ -75,6 +78,7 @@ public:
   float ReturnBirthTime(void) { return BirthTime; };
   double ReturnFinalMass(void) { return FinalMass; };
   void  AssignFinalMass(double value) { FinalMass = value; };
+  float ReturnAge(void) { return ( Time - BirthTime ); };
   float ReturnLifetime(void) { return LifeTime; };
   float ReturnBirthtime(void) { return BirthTime; };
   int   ReturnLevel(void) { return level; };
@@ -175,8 +179,8 @@ public:
 
   Star* StarBufferToList(StarBuffer *buffer, int n);
   void StarListToBuffer(StarBuffer *&result, int n);
-  void StarToBuffer(StarBuffer *result);
-  
+  void StarToBuffer(StarBuffer *result); 
+
 };
 
 #endif
