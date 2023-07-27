@@ -299,152 +299,161 @@ int grid::AddFeedbackSphere(Star *cstar, int level, float radius, float DensityU
 
   if (cstar->FeedbackFlag == MBH_THERMAL) {
 
-    maxGE = MAX_TEMPERATURE / (TemperatureUnits * (Gamma-1.0) * 0.6);
+    float cellWidth = CellWidth[0][0];
+    float halfWindowWidth = cellWidth;
 
-    for (k = 0; k < GridDimension[2]; k++) {
+    float designVolume = 4.0 / 3.0 * pi * pow(radius, 3);
+    float actualVolume = 8.0 * pow(cellWidth, 3);
+    float convertFactor = designVolume / actualVolume;
+    EjectaThermalEnergy *= convertFactor;
 
-      delz = CellLeftEdge[2][k] + 0.5*CellWidth[2][k] - cstar->pos[2];
-      sz = sign(delz);
+    printf("AddFeedbackSphere: [proc=%d], width = %g, dim = (%d, %d, %d), corner = (%g, %g, %g)\n   pos = (%g, %g, %g)\n",
+           MyProcessorNumber, GridDimension[0], GridDimension[1], GridDimension[2], CellWidth[0][0],
+           GridLeftEdge[0], GridLeftEdge[1], GridLeftEdge[2], cstar->pos[0], cstar->pos[1], cstar->pos[2]);
+
+    maxGE = MAX_TEMPERATURE / (TemperatureUnits * (Gamma - 1.0) * 0.6);
+    for (int k = 0; k < GridDimension[2]; ++k)
+    {
+
+      delz = CellLeftEdge[2][k] + 0.5 * CellWidth[2][k] - cstar->pos[2];
       delz = fabs(delz);
-      delz = min(delz, DomainWidth[2]-delz);
+      if (delz > halfWindowWidth)
+        continue;
 
-      for (j = 0; j < GridDimension[1]; j++) {
+      for (int j = 0; j < GridDimension[1]; ++j)
+      {
 
-	dely = CellLeftEdge[1][j] + 0.5*CellWidth[1][j] - cstar->pos[1];
-	sy = sign(dely);
-	dely = fabs(dely);
-	dely = min(dely, DomainWidth[1]-dely);
+        dely = CellLeftEdge[1][j] + 0.5 * CellWidth[1][j] - cstar->pos[1];
+        dely = fabs(dely);
+        if (dely > halfWindowWidth)
+          continue;
 
-	index = (k*GridDimension[1] + j)*GridDimension[0];
-	for (i = 0; i < GridDimension[0]; i++, index++) {
+        for (int i = 0; i < GridDimension[0]; ++i)
+        {
 
-	  delx = CellLeftEdge[0][i] + 0.5*CellWidth[0][i] - cstar->pos[0];
-	  sx = sign(delx);
-	  delx = fabs(delx);
-	  delx = min(delx, DomainWidth[0]-delx);
+          delx = CellLeftEdge[0][i] + 0.5 * CellWidth[0][i] - cstar->pos[0];
+          delx = fabs(delx);
 
-	  radius2 = delx*delx + dely*dely + delz*delz;
-	  if (radius2 <= outerRadius2) {
+          if (delx <= halfWindowWidth)
+          {
+            int index = (k * GridDimension[1] + j) * GridDimension[0] + i;
+            radius2 = 0.;
+            r1 = 0.0 * sqrt(radius2) / radius; // disable smoothing
+            norm = 0.98;
+            ramp = norm * (0.5 - 0.5 * tanh(10.0 * (r1 - 1.0)));
+            factor = 0.578704;
 
-	    r1 = sqrt(radius2) / radius;
-	    norm = 0.98;
-	    ramp = norm*(0.5 - 0.5 * tanh(10.0*(r1-1.0)));
-//          ramp = min(max(1.0 - (r1 - 0.8)/0.4, 0.01), 1.0);
+            OldDensity = BaryonField[DensNum][index];
+            BaryonField[DensNum][index] += factor * EjectaDensity;
 
-	    /* 1/1.2^3 factor to dilute the density since we're
-	       depositing a uniform ejecta in a sphere of 1.2*radius
-	       without a ramp.  The ramp is only applied to the
-	       energy*density factor. */
-	    factor = 0.578704;
+            /* Get specific energy */
 
-	    OldDensity = BaryonField[DensNum][index];
-	    BaryonField[DensNum][index] += factor*EjectaDensity;
+            if (GENum >= 0 && DualEnergyFormalism)
+            {
 
-	    /* Get specific energy */
-
-	    if (GENum >= 0 && DualEnergyFormalism) {
-
-	      /* When injected energy is uniform throughout the volume;
-		 EjectaThermalEnergy in ergs/cm3 */
-	      newGE = (OldDensity * BaryonField[GENum][index] +
-		       ramp * factor * EjectaThermalEnergy) /
-		BaryonField[DensNum][index];
+              /* When injected energy is uniform throughout the volume;
+     EjectaThermalEnergy in ergs/cm3 */
+              newGE = (OldDensity * BaryonField[GENum][index] +
+                       ramp * factor * EjectaThermalEnergy) /
+                      BaryonField[DensNum][index];
+              
 
 #ifdef USE_ONE_OVER_RSQUARED
-	      /* When injected energy is proportional to 1/R^2;
-		 EjectaThermalEnergy in ergs/cm3/(1/cm^2) */
-	      newGE = (OldDensity * BaryonField[GENum][index] +
-		       ramp * factor * EjectaThermalEnergy * 
-		       min(1.0/radius2, 1.0/(4.0*CellWidth[0][0]*CellWidth[0][0]))) /
-		BaryonField[DensNum][index];
+              /* When injected energy is proportional to 1/R^2;
+     EjectaThermalEnergy in ergs/cm3/(1/cm^2) */
+              newGE = (OldDensity * BaryonField[GENum][index] +
+                       ramp * factor * EjectaThermalEnergy *
+                           min(1.0 / radius2, 1.0 / (4.0 * CellWidth[0][0] * CellWidth[0][0]))) /
+                      BaryonField[DensNum][index];
 #endif
 
 #ifdef CONSTANT_SPECIFIC
-	      /* When injected energy is proportional to the cell mass;
-		 EjectaThermalEnergy in ergs/g = cm2/s2 */
-	      newGE = (BaryonField[GENum][index] + EjectaThermalEnergy) *
-		OldDensity / BaryonField[DensNum][index];
+              /* When injected energy is proportional to the cell mass;
+     EjectaThermalEnergy in ergs/g = cm2/s2 */
+              newGE = (BaryonField[GENum][index] + EjectaThermalEnergy) *
+                      OldDensity / BaryonField[DensNum][index];
 #endif
+              printf("AddFeedbackSphere: [proc=%d], pos = (%d, %d, %d), newGE = %g, maxGE = %g\n",
+                MyProcessorNumber, i, j, k, newGE, maxGE);
 
-	      newGE = min(newGE, maxGE);  
+              newGE = min(newGE, maxGE);
 
-	      BaryonField[GENum][index] = newGE;
-	      BaryonField[TENum][index] = newGE;
+              BaryonField[GENum][index] = newGE;
+              BaryonField[TENum][index] = newGE;
 
-	      for (dim = 0; dim < GridRank; dim++)
-		BaryonField[TENum][index] += 
-		  0.5 * BaryonField[Vel1Num+dim][index] * 
-		  BaryonField[Vel1Num+dim][index];
+              for (dim = 0; dim < GridRank; dim++)
+                BaryonField[TENum][index] +=
+                    0.5 * BaryonField[Vel1Num + dim][index] *
+                    BaryonField[Vel1Num + dim][index];
+            }
+            else
+            {
 
-	    } else {
-
-	      newGE = (OldDensity * BaryonField[TENum][index] +
-		       ramp * factor * EjectaThermalEnergy) /
-		BaryonField[DensNum][index];
+              newGE = (OldDensity * BaryonField[TENum][index] +
+                       ramp * factor * EjectaThermalEnergy) /
+                      BaryonField[DensNum][index];
 
 #ifdef USE_ONE_OVER_RSQUARED
-	      newGE = (OldDensity * BaryonField[TENum][index] +
-		       ramp * factor * EjectaThermalEnergy * 
-		       min(1.0/radius2, 1.0/(4.0*CellWidth[0][0]*CellWidth[0][0]))) /
-		BaryonField[DensNum][index];
+              newGE = (OldDensity * BaryonField[TENum][index] +
+                       ramp * factor * EjectaThermalEnergy *
+                           min(1.0 / radius2, 1.0 / (4.0 * CellWidth[0][0] * CellWidth[0][0]))) /
+                      BaryonField[DensNum][index];
 #endif
-	      
+
 #ifdef CONSTANT_SPECIFIC
-	      newGE = (BaryonField[TENum][index] + EjectaThermalEnergy) *
-		OldDensity / BaryonField[DensNum][index];
+              newGE = (BaryonField[TENum][index] + EjectaThermalEnergy) *
+                      OldDensity / BaryonField[DensNum][index];
 #endif
+              newGE = min(newGE, maxGE);
+              BaryonField[TENum][index] = newGE;
 
-//	      printf("grid::AddFS: rho= %"GSYM"->%"GSYM", TE= %"GSYM"->%"GSYM", drho= %"GSYM", dE= %"GSYM"\n", 
-//		     OldDensity, BaryonField[DensNum][index], 
-//		     BaryonField[TENum][index], newGE, EjectaDensity, EjectaThermalEnergy * 1/radius2); 
+            } //end if(GENum >= 0 && DualEnergyFormalism)
 
-	      newGE = min(newGE, maxGE);  
-	      BaryonField[TENum][index] = newGE;
+            /* Update species and colour fields */
 
-	    } //end if(GENum >= 0 && DualEnergyFormalism)
+            if (MetallicityField == TRUE && radius2 <= MetalRadius2)
+              delta_fz = EjectaMetalDensity / OldDensity;
+            else
+              delta_fz = 0.0;
+            increase = BaryonField[DensNum][index] / OldDensity - delta_fz;
 
-	    /* Update species and colour fields */
+            if (MultiSpecies)
+            {
+              BaryonField[DeNum][index] *= increase;
+              BaryonField[HINum][index] *= increase;
+              BaryonField[HIINum][index] *= increase;
+              BaryonField[HeINum][index] *= increase;
+              BaryonField[HeIINum][index] *= increase;
+              BaryonField[HeIIINum][index] *= increase;
+            }
+            if (MultiSpecies > 1)
+            {
+              BaryonField[HMNum][index] *= increase;
+              BaryonField[H2INum][index] *= increase;
+              BaryonField[H2IINum][index] *= increase;
+            }
+            if (MultiSpecies > 2)
+            {
+              BaryonField[DINum][index] *= increase;
+              BaryonField[DIINum][index] *= increase;
+              BaryonField[HDINum][index] *= increase;
+            }
 
-	    if (MetallicityField == TRUE && radius2 <= MetalRadius2)
-	      delta_fz = EjectaMetalDensity / OldDensity;
-	    else
-	      delta_fz = 0.0;
-	    increase = BaryonField[DensNum][index] / OldDensity - delta_fz;
+            if (MetallicityField == TRUE)
+              BaryonField[MetalNum][index] += EjectaMetalDensity;
 
-	    if (MultiSpecies) {
-	      BaryonField[DeNum][index] *= increase;
-	      BaryonField[HINum][index] *= increase;
-	      BaryonField[HIINum][index] *= increase;
-	      BaryonField[HeINum][index] *= increase;
-	      BaryonField[HeIINum][index] *= increase;
-	      BaryonField[HeIIINum][index] *= increase;
-	    }
-	    if (MultiSpecies > 1) {
-	      BaryonField[HMNum][index] *= increase;
-	      BaryonField[H2INum][index] *= increase;
-	      BaryonField[H2IINum][index] *= increase;
-	    }
-	    if (MultiSpecies > 2) {
-	      BaryonField[DINum][index] *= increase;
-	      BaryonField[DIINum][index] *= increase;
-	      BaryonField[HDINum][index] *= increase;
-	    }
+            /* MBHColour injected */
+            if (MBHColourNum > 0)
+              BaryonField[MBHColourNum][index] += factor * EjectaDensity;
 
-	    if (MetallicityField == TRUE)
-	      BaryonField[MetalNum][index] += EjectaMetalDensity;
+            CellsModified++;
 
-	    /* MBHColour injected */
-	    if (MBHColourNum > 0)
-	      BaryonField[MBHColourNum][index] += factor*EjectaDensity;
+          } // END if inside radius
+        }   // END i-direction
+      }     // END j-direction
+    }       // END k-direction
 
-	    CellsModified++;
-
-	  } // END if inside radius
-	}  // END i-direction
-      }  // END j-direction
-    }  // END k-direction
-
-  }  // END MBH_THERMAL
+  } // END MBH_THERMAL
 
   /***********************************************************************
                                  MBH_JETS
@@ -653,8 +662,14 @@ int grid::AddFeedbackSphere(Star *cstar, int level, float radius, float DensityU
        Note that EjectaThermalEnergy is never used; MBHFeedbackEnergyCoupling 
        should now be calculated considering gravitational redshift (Kim et al. 2010) */
 
-    MBHJetsVelocity = clight * sqrt( 2 * MBHFeedbackEnergyCoupling * MBHFeedbackRadiativeEfficiency 
-				      / MBHFeedbackMassEjectionFraction ) / VelocityUnits;
+    // MBHFeedbackEnergyCoupling * MBHFeedbackRadiativeEfficiency * Mdot * c^2 
+    //   * (1 - MBHFeedbackMassEjectionFraction)
+    // == 0.5 * MBHFeedbackMassEjectionFraction * Mdot * (MBHJetsVelocity)^2
+
+    MBHJetsVelocity = clight * sqrt(2 * MBHFeedbackEnergyCoupling * 
+        (1.0f - MBHFeedbackMassEjectionFraction) *
+        MBHFeedbackRadiativeEfficiency / MBHFeedbackMassEjectionFraction
+      ) / VelocityUnits;
 
     if (MBHJetsVelocity * VelocityUnits > 0.99*clight) {
       ENZO_VFAIL("grid::AddFS: MBHJetsVelocity is ultra-relativistic! (%g/ %g/ %g/ %g c)\n",
@@ -752,8 +767,8 @@ int grid::AddFeedbackSphere(Star *cstar, int level, float radius, float DensityU
     cstar->vel[0] *= old_mass / cstar->Mass; 
     cstar->vel[1] *= old_mass / cstar->Mass;
     cstar->vel[2] *= old_mass / cstar->Mass; 
-//    fprintf(stdout, "grid::AFS:  Mass = %lf -> %lf, vel[1] = %f -> %f\n", 
-//	    old_mass, cstar->Mass, old_vel1, cstar->vel[1]);  
+    fprintf(stdout, "grid::AFS:  Mass = %lf -> %lf, vel[1] = %f -> %f\n", 
+	    old_mass, cstar->Mass, old_vel1, cstar->vel[1]);  
 
     fprintf(stdout, "grid::AddFS: jets injected (EjectaM = %g Ms, JetsVelocity = %g, grid v = %g, rho_jet = %g) along n_L = (%g, %g, %g)\n", 
 	    EjectaMass * DensityUnits * pow(LengthUnits,3.0) / SolarMass,

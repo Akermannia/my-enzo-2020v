@@ -498,14 +498,83 @@ int Star::CalculateMassAccretion(float &BondiRadius, float &density)
       // mdot = -rho * A * div(v) in SolarMass/sec (if no converging flow, no accretion)
       mdot = max(0.0, -density * DensityUnits * POW(CurrentGrid->CellWidth[0][0]*LengthUnits, 2.0) *
 		 divergence * VelocityUnits / SolarMass);	
-    }		   
+    }
+
+    // Hopkins & Quataert (2011)
+    if (MBHAccretion == 9 || MBHAccretion == 19)
+    {
+      float cell_width = CurrentGrid->CellWidth[0][0];
+      float cell_x = CurrentGrid->GridLeftEdge[0] + igrid[0] * cell_width;
+      float cell_y = CurrentGrid->GridLeftEdge[1] + igrid[1] * cell_width;
+      float cell_z = CurrentGrid->GridLeftEdge[2] + igrid[2] * cell_width;
+      float alpha = 5.0;
+      float M_gas = (density * DensityUnits) * pow(cell_width * LengthUnits, 3.0) / SolarMass;
+      float M_bh = this->Mass;
+      enum { NUM_BINS = 4 };
+      float M_star_r[NUM_BINS] = {0.0f};
+      float M_dm_r[NUM_BINS] = {0.0f};
+      
+      for (int i = 0; i < CurrentGrid->NumberOfParticles; ++i)
+      {
+        float dx = (CurrentGrid->ParticlePosition[0][i] - pos[0]) / cell_width;
+        float dy = (CurrentGrid->ParticlePosition[1][i] - pos[1]) / cell_width;
+        float dz = (CurrentGrid->ParticlePosition[2][i] - pos[2]) / cell_width;
+
+        float sqr_radius = dx * dx + dy * dy + dz * dz;
+        if (sqr_radius > 16.0f)
+          continue;
+
+        float* target_array = NULL;
+        switch (CurrentGrid->ParticleType[i])
+          {
+          case PARTICLE_TYPE_DARK_MATTER:
+            target_array = &M_dm_r[0]; break;
+          case PARTICLE_TYPE_STAR:
+          case PARTICLE_TYPE_MUST_REFINE:
+            target_array = &M_star_r[0]; break;
+          default:
+            continue;
+          }
+        float particle_mass = CurrentGrid->ParticleMass[i];
+        if (sqr_radius <= 1.0f)
+          target_array[0] += particle_mass;
+        else if (sqr_radius <= 4.0f)
+          target_array[1] += particle_mass;
+        else if (sqr_radius <= 9.0f)
+          target_array[2] += particle_mass;
+        else
+          target_array[3] += particle_mass;
+      }
+      float M_star = 0.0;
+      float M_dm = 0.0;
+
+      for (int bin = 1; bin <= NUM_BINS; ++bin)
+      {
+        float current_M_star = M_star_r[bin - 1] / (4.19 * bin * bin * bin);
+        float current_M_dm   = M_dm_r  [bin - 1] / (4.19 * bin * bin * bin);
+        if (current_M_star > M_star) M_star = current_M_star;
+        if (current_M_dm   > M_dm)   M_dm   = current_M_dm;
+      }
+
+      float f_d = (M_star + M_gas) / (M_star + M_gas + M_dm + M_bh);
+      float f_0 = 0.31 * f_d * f_d * pow((M_star + M_gas) / 1e9, -1.0 / 3);
+      float f_gas = M_gas / (M_star + M_gas);
+      float R_0_kpc = 0.62035 * cell_width * LengthUnits / kpc_cm;
+
+      fprintf(stdout, "HQ2011[%"ISYM"]: M_gas = %"GSYM" M_s, M_star = %"GSYM" Ms, M_dm = %"GSYM" M_s, f_d = %"GSYM", f_0 = %"GSYM", f_gas = %"GSYM", R_0 = %"GSYM" kpc\n",
+	      Identifier, M_gas, M_star, M_dm, f_d, f_0, f_gas, R_0_kpc);
+
+      mdot = alpha * pow(f_d, 2.5) * pow(M_bh / 1e8, 1.0 / 6) * ((M_star + M_gas) / 1e9) *
+        pow(10 * R_0_kpc, -1.5) / (1.0 + f_0 / f_gas) / yr_s;
+      mdot_original = mdot;
+    }
 
     /* Calculate Eddington accretion rate in SolarMass/s; In general, when calculating 
        the Eddington limit the radiative efficiency shouldn't be smaller than 
        0.1 even when MBHFeedbackRadiativeEfficiency is set to be lower than 0.1 for 
        a logistical purpose (to combine radiative+mechanical feedbacks for example) */
 
-    mdot_Edd = 4.0 * PI * GravConst * old_mass * mh /
+    mdot_Edd = (1.0 / (1.0 - MBHFeedbackMassEjectionFraction)) * 4.0 * PI * GravConst * old_mass * mh /
       max(MBHFeedbackRadiativeEfficiency, 0.1) / sigma_thompson / clight;     
     if (MBHAccretion < 10 && MBHAccretingMassRatio != BONDI_ACCRETION_CORRECT_NUMERICAL) {
       mdot = min(mdot, mdot_Edd); 
@@ -526,11 +595,10 @@ int Star::CalculateMassAccretion(float &BondiRadius, float &density)
     this->accretion_time[0] = time;
     
     if (mdot > 0.0) {
-      fprintf(stdout, "BH Accretion[%"ISYM"]: time = %"FSYM", mdot = %"GSYM" (%"GSYM"/%"GSYM") SolarMass/yr, "
-	      "M_BH = %lf SolarMass, rho = %"GSYM" g/cm3, T = %"GSYM" K, v_rel = %"GSYM" cm/s\n",
-	      Identifier, time, mdot*yr_s, mdot_original*yr_s, mdot_Edd*yr_s, Mass, density*DensityUnits,
-	      temperature[index], v_rel);
-      //    this->PrintInfo();  
+      fprintf(stdout, "BH Accretion[%"ISYM"]: time = %"FSYM", mdot = %"GSYM" (%"GSYM"/%"GSYM") Ms/yr, "
+        "M_BH = %"GSYM" Ms, rho = %"GSYM" g/cm3, T = %"GSYM" K, v_rel = %"GSYM" cm/s\n",
+        Identifier, time, mdot*yr_s, mdot_original*yr_s, mdot_Edd*yr_s, FLOAT(Mass), density*DensityUnits,
+        temperature[index], v_rel);
     }
     
   } // ENDIF LOCAL_ACCRETION with type == MBH

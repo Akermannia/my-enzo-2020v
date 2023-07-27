@@ -83,7 +83,6 @@ int mbh_maker(int *nx, int *ny, int *nz, int *size, float *d, float *u,
       if (line[0] != '#') {
 
 	/* order: MBH mass (in Ms), MBH position[3], MBH creation time (w.r.t. the current time) */
-
 	if (sscanf(line, " %"FSYM"  %"PSYM"  %"PSYM"  %"PSYM"  %"FSYM, 
 		   &dummy_float[0], &dummy_double[0], &dummy_double[1],
 		   &dummy_double[2], &dummy_float[1]) != 5) {
@@ -128,9 +127,9 @@ int mbh_maker(int *nx, int *ny, int *nz, int *size, float *d, float *u,
 	      tcp[ii] = (float) ((*t) + dummy_float[1]);
 
 	    // MBH other attributes 
-	    up[ii] = u[index];
-	    vp[ii] = v[index];
-	    wp[ii] = w[index];
+	    up[ii] = 0.0f * u[index];
+	    vp[ii] = 0.0f * v[index];
+	    wp[ii] = 0.0f * w[index];
 	    tdp[ii] = MBHMinDynamicalTime;
 	    
 	    // the particle type has to be negative because it is just created 

@@ -37,7 +37,6 @@ void Star::CalculateFeedbackParameters(float &Radius,
 				       float VelocityUnits, float dtForThisStar,
 				       FLOAT Time, bool &SphereCheck)
 {
-
   // Parameters for the Stroemgren sphere in Whalen et al. (2004)
   const float	BirthRadius	  = 50;		// pc
   const float	WhalenTemperature = 20000;	// K
@@ -194,6 +193,12 @@ void Star::CalculateFeedbackParameters(float &Radius,
     EjectaThermalEnergy = MBHFeedbackEnergyCoupling * MBHFeedbackRadiativeEfficiency * 
       mdot * SolarMass * clight * clight * dtForThisStar * TimeUnits / 
       EjectaVolume / DensityUnits / (VelocityUnits * VelocityUnits); 
+
+    if (MyProcessorNumber == ROOT_PROCESSOR)
+    {
+      printf("CalculateFeedBackParameter: EjectaThermalEnergy = %g ergs/cm^3, Radius = %g cm\n",
+        EjectaThermalEnergy, Radius * LengthUnits);
+    }
 
 #ifdef CONSTANT_SPECIFIC
     /* When injected energy is proportional to the cell mass;
