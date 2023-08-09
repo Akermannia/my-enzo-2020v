@@ -119,9 +119,12 @@ int grid::UpdateParticleVelocity(float TimeStep)
  
       /* Otherwise, just add the acceleration. */
  
-      for (i = 0; i < NumberOfParticles; i++)
-	ParticleVelocity[dim][i] += ParticleAcceleration[dim][i] * TimeStep;
- 
+      for (i = 0; i < NumberOfParticles; i++) {
+        if (ParticleType[i] == MBH)
+          ParticleVelocity[dim][i] = 0.0;
+        else
+	  ParticleVelocity[dim][i] += ParticleAcceleration[dim][i] * TimeStep;
+      }
   }
 
 

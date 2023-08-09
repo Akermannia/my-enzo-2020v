@@ -97,10 +97,10 @@ int Star::Accrete(void)
     const int particle_count_threshold = 20;
     int particle_count = 0;
     float particle_velocity[MAX_DIMENSION] = {0.};
-    const float particle_damping_timescale = 0.001f;
-    const float acceleration_damping_timescale = 0.0001f;
-    const float alpha = -std::expm1(-this_dt / particle_damping_timescale);
-    const float beta = -std::expm1(-this_dt / acceleration_damping_timescale);
+//    const float particle_damping_timescale = 0.001f;
+//    const float acceleration_damping_timescale = 0.0001f;
+//    const float alpha = -std::expm1(-this_dt / particle_damping_timescale);
+//    const float beta = -std::expm1(-this_dt / acceleration_damping_timescale);
     const float distance2 = pow(7 * CurrentGrid->GetCellWidth(0, 0), 2.0f);
 
     for (int i = 0; i < CurrentGrid->NumberOfParticles; ++i)
@@ -113,53 +113,54 @@ int Star::Accrete(void)
       float dz = CurrentGrid->ParticlePosition[2][i] - pos[2];
       if (dx * dx + dy * dy + dz * dz > distance2)
         continue;
-      particle_velocity[0] += CurrentGrid->ParticleVelocity[0][i];
-      particle_velocity[1] += CurrentGrid->ParticleVelocity[1][i];
-      particle_velocity[2] += CurrentGrid->ParticleVelocity[2][i];
+      particle_velocity[0] = 0.0;
+      particle_velocity[1] = 0.0;
+      particle_velocity[2] = 0.0;
       ++particle_count;
     }
-    for (size_t d = 0; d < MAX_DIMENSION; ++d) {
-      particle_velocity[d] /= max(1.0f, float(particle_count));
-    }
 
-    float acceleration[MAX_DIMENSION] = {0.};
-    float acceleration_magnitude = 0.0f;
-    for (size_t d = 0; d < MAX_DIMENSION; ++d) {
-      acceleration[d] = vel[d] - last_vel[d];
-      acceleration_magnitude += acceleration[d] * acceleration[d];
-    }
+//    for (size_t d = 0; d < MAX_DIMENSION; ++d) {
+//      particle_velocity[d] /= max(1.0f, float(particle_count));
+//    }
+//
+//    float acceleration[MAX_DIMENSION] = {0.};
+//    float acceleration_magnitude = 0.0f;
+//    for (size_t d = 0; d < MAX_DIMENSION; ++d) {
+//      acceleration[d] = vel[d] - last_vel[d];
+//      acceleration_magnitude += acceleration[d] * acceleration[d];
+//    }
+//
+//    if (acceleration_magnitude > 0.0f) {
+//      acceleration_magnitude = std::sqrt(acceleration_magnitude);
+//      for (size_t d = 0; d < MAX_DIMENSION; ++d) {
+//        acceleration[d] /= acceleration_magnitude;
+//      }
+//      float inner_acceration_velocity = 0.0f;
+//      for (size_t d = 0; d < MAX_DIMENSION; ++d) {
+//        inner_acceration_velocity += acceleration[d] * vel[d];
+//      }
+//
+//      // damp the velocity perpendicular to the acceleration
+//      for (size_t d = 0; d < MAX_DIMENSION; ++d) {
+//        vel[d] = (1.f - beta) * vel[d] +
+//          beta * (inner_acceration_velocity * acceleration[d]);
+//      }
+//    }
+//
+//    // damp the velocity relative to surrounding particles
+//    if (particle_count >= particle_count_threshold) {
+//      for (size_t d = 0; d < MAX_DIMENSION; ++d) {
+//        vel[d] = (1.f - alpha) * vel[d] + alpha * particle_velocity[d];
+//      }
+//    }
 
-    if (acceleration_magnitude > 0.0f) {
-      acceleration_magnitude = std::sqrt(acceleration_magnitude);
       for (size_t d = 0; d < MAX_DIMENSION; ++d) {
-        acceleration[d] /= acceleration_magnitude;
-      }
-      float inner_acceration_velocity = 0.0f;
-      for (size_t d = 0; d < MAX_DIMENSION; ++d) {
-        inner_acceration_velocity += acceleration[d] * vel[d];
-      }
-
-      // damp the velocity perpendicular to the acceleration
-      for (size_t d = 0; d < MAX_DIMENSION; ++d) {
-        vel[d] = (1.f - beta) * vel[d] +
-          beta * (inner_acceration_velocity * acceleration[d]);
-      }
-    }
-
-    // damp the velocity relative to surrounding particles
-    if (particle_count >= particle_count_threshold) {
-      for (size_t d = 0; d < MAX_DIMENSION; ++d) {
-        vel[d] = (1.f - alpha) * vel[d] + alpha * particle_velocity[d];
-      }
-    }
-
+        vel[d] = particle_velocity[d];
+      }    
+      
     printf("StarAccrete[%"ISYM"]: n_drag = %"ISYM", vel = (%"GSYM", %"GSYM", %"GSYM"), pos = (%"GSYM", %"GSYM", %"GSYM"), mass = %"GSYM"\n",
       Identifier, particle_count, vel[0], vel[1], vel[2], pos[0], pos[1], pos[2], FLOAT(Mass));
 
-    // Keep the last velocity for future use
-    for (size_t d = 0; d < MAX_DIMENSION; ++d) {
-      last_vel[d] = vel[d];
-    }
   }
 
 
@@ -180,7 +181,7 @@ int Star::Accrete(void)
   if (naccretions > 0) {
     FLOAT *temp_time = new FLOAT[naccretions];
     float *temp_rate = new float[naccretions];
-    for (i = 0; i < naccretions+n; i++)
+    for (int i = 0; i < naccretions+n; i++)
       if (accretion_time[i] <= time+dt) {
 	temp_rate[count] = accretion_rate[i];
 	temp_time[count] = accretion_time[i];
